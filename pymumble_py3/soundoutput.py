@@ -99,23 +99,27 @@ class SoundOutput:
             header = self.codec_type << 5  # encapsulate in audio packet
             sequence = VarInt(self.sequence).encode()
 
-            udppacket = struct.pack('!B', header | self.target) + sequence + payload
+            udp_packet = struct.pack('!B', header | self.target) + sequence + payload
             if self.mumble_object.positional:
-                udppacket += struct.pack("fff", self.mumble_object.positional[0], self.mumble_object.positional[1], self.mumble_object.positional[2])
+                udp_packet += struct.pack("fff", self.mumble_object.positional[0], self.mumble_object.positional[1], self.mumble_object.positional[2])
 
-            self.Log.debug("audio packet to send: sequence:{sequence}, type:{type}, length:{len}".format(
+            self.Log.debug("{PROTO} audio packet to send: sequence:{sequence}, type:{type}, length:{len}".format(
+                PROTO='UDP' if self.mumble_object.udp_active else 'TCP',
                 sequence=self.sequence,
                 type=self.codec_type,
-                len=len(udppacket)
+                len=len(udp_packet)
             ))
 
-            tcppacket = struct.pack("!HL", PYMUMBLE_MSG_TYPES_UDPTUNNEL, len(udppacket)) + udppacket  # encapsulate in tcp tunnel
+            if self.mumble_object.udp_active:
+                self.mumble_object.send_udp(udp_packet)
+            else:
+                tcp_packet = struct.pack("!HL", PYMUMBLE_MSG_TYPES_UDPTUNNEL, len(udp_packet)) + udp_packet  # encapsulate in tcp tunnel
 
-            while len(tcppacket) > 0:
-                sent = self.mumble_object.control_socket.send(tcppacket)
-                if sent < 0:
-                    raise socket.error("Server socket error")
-                tcppacket = tcppacket[sent:]
+                while len(tcp_packet) > 0:
+                    sent = self.mumble_object.control_socket.send(tcp_packet)
+                    if sent < 0:
+                        raise socket.error("Server socket error")
+                    tcp_packet = tcp_packet[sent:]
 
     def get_audio_per_packet(self):
         """return the configured length of a audio packet (in ms)"""

@@ -163,51 +163,51 @@ class CryptStateOCB2:
             raise DecryptFailedException('Source <4 bytes long!')
 
         div = self.decrypt_iv.copy()
-        ivbyte = source[0]
+        ivbyte = source[0] & 0xFF
         late = False
         lost = 0
 
         if (div[0] + 1) & 0xFF == ivbyte:
             # In order as expected.
-            if ivbyte > div[0]:
+            if ivbyte > (div[0] & 0xFF):
                 div[0] = ivbyte
-            elif ivbyte < div[0]:
+            elif ivbyte < (div[0] & 0xFF):
                 div[0] = ivbyte
                 div = increment_iv(div, 1)
             else:
                 raise DecryptFailedException('ivbyte == decrypt_iv[0]')
         else:
             # This is either out of order or a repeat.
-            diff = ivbyte - div[0]
+            diff = ivbyte - (div[0] & 0xFF)
             if diff > 128:
                 diff -= 256
             elif diff < -128:
                 diff += 256
 
-            if ivbyte < div[0] and -30 < diff < 0:
+            if ivbyte < (div[0] & 0xFF) and -30 < diff < 0:
                 # Late packet, but no wraparound.
                 late = True
                 lost = -1
                 div[0] = ivbyte
-            elif ivbyte > div[0] and -30 < diff < 0:
+            elif ivbyte > (div[0] & 0xFF) and -30 < diff < 0:
                 # Last was 0x02, here comes 0xff from last round
                 late = True
                 lost = -1
                 div[0] = ivbyte
                 div = decrement_iv(div, 1)
-            elif ivbyte > div[0] and diff > 0:
+            elif ivbyte > (div[0] & 0xFF) and diff > 0:
                 # Lost a few packets, but beyond that we're good.
                 lost = ivbyte - div[0] - 1
                 div[0] = ivbyte
-            elif ivbyte < div[0] and diff > 0:
+            elif ivbyte < (div[0] & 0xFF) and diff > 0:
                 # Lost a few packets, and wrapped around
-                lost = 0x100 - div[0] + ivbyte - 1
+                lost = 0x100 - (div[0] & 0xFF) + ivbyte - 1
                 div[0] = ivbyte
                 div = increment_iv(div, 1)
             else:
                 raise DecryptFailedException('Lost too many packets?')
 
-            if self.decrypt_history[div[0]] == div[1]:
+            if self.decrypt_history[div[0] & 0xFF] == self.encrypt_iv[0]: #div[1]:
                 raise DecryptFailedException('decrypt_iv in history')
 
         dst, tag = ocb_decrypt(self._aes, source[4:], bytes(div), len_plain)
@@ -215,11 +215,12 @@ class CryptStateOCB2:
         if tag[:3] != source[1:4]:
             raise DecryptFailedException('Tag did not match!')
 
-        self.decrypt_history[div[0]] = div[1]
+        self.decrypt_history[div[0] & 0xFF] = div[1]
 
-        if not late:
-            self.decrypt_iv = div
-        else:
+        #if not late:
+        self.decrypt_iv = div
+        #else:
+        if late:
             self.uiLate += 1
 
         self.uiGood += 1
@@ -244,6 +245,7 @@ def ocb_encrypt(aes: object,
         aes: AES-ECB cipher object
         plain: The plaintext bytes to be encrypted
         nonce: The encryption IV
+        insecure: Disable checks if attack is possible
 
     Returns:
         Encrypted (ciphertext) bytes and tag
@@ -355,7 +357,7 @@ def ocb_decrypt(aes: object,
 
 def increment_iv(iv: bytearray, start: int = 0) -> bytearray:
     for i in range(start, AES_BLOCK_SIZE):
-        iv[i] = (iv[i] + 1) % 0x100
+        iv[i] = (iv[i] + 1)# % 0x100
         if iv[i] != 0:
             break
     return iv
@@ -363,7 +365,7 @@ def increment_iv(iv: bytearray, start: int = 0) -> bytearray:
 
 def decrement_iv(iv: bytearray, start: int = 0) -> bytearray:
     for i in range(start, AES_BLOCK_SIZE):
-        iv[i] = (iv[i] - 1) % 0x100
+        iv[i] = (iv[i] - 1)# % 0x100
         if iv[i] != 0xFF:
             break
     return iv
