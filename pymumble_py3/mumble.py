@@ -203,7 +203,12 @@ class Mumble(threading.Thread):
             self.media_socket.settimeout(6)
             self.ocb.set_key(bytes(mess.key), encrypt_iv=bytearray(mess.client_nonce), decrypt_iv=bytearray(mess.server_nonce))
         else:
-            raise ConnectionError
+            #raise ConnectionError
+            self.media_socket.close()
+            self.Log.warning("Received invalid CryptSetup packet. Using TCP for audio traffic.")
+            self.udp_active = False
+            return False
+
 
         self.Log.warning("Sending UDP ping")
 
@@ -382,10 +387,10 @@ class Mumble(threading.Thread):
 
     def dispatch_control_message(self, msg_type, message):
         """Dispatch control messages based on their type"""
-        self.Log.debug("dispatch control message")
+        self.Log.debug("dispatch control message, type: %s, msg: %s", msg_type, message)
         if msg_type == PYMUMBLE_MSG_TYPES_UDPTUNNEL:  # audio encapsulated in control message
-            if self.receive_sound:
-                self.sound_received(message)
+            #if self.receive_sound:
+            self.sound_received(message)
 
         elif msg_type == PYMUMBLE_MSG_TYPES_VERSION:
             mess = mumble_pb2.Version()
