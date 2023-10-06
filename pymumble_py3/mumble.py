@@ -228,7 +228,12 @@ class Mumble(threading.Thread):
         self.Log.warning("udp_active = True")
 
     def send_packet_udp(self, msg):
-        pk_encrypt = self.ocb.encrypt(msg)
+        try:
+            pk_encrypt = self.ocb.encrypt(msg)
+        except:
+            self.Log.exception("Exception encrypting data, skipping")
+            return
+
         try:
             self.Log.debug("Sending UDP packet")
             #self.Log.debug("enc: %s (pt: %s)", pk_encrypt, msg)
