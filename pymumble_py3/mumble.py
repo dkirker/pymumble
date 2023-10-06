@@ -230,8 +230,9 @@ class Mumble(threading.Thread):
     def send_packet_udp(self, msg):
         pk_encrypt = self.ocb.encrypt(msg)
         try:
+            self.Log.debug("Sending UDP packet")
+            #self.Log.debug("enc: %s (pt: %s)", pk_encrypt, msg)
             self.media_socket.sendto(pk_encrypt, (self.host, self.port))
-            self.Log.debug("Sending UDP PING")
         except (socket.gaierror, socket.timeout) as e:
             self.Log.error(e)
 
@@ -274,8 +275,6 @@ class Mumble(threading.Thread):
                 self.connected = PYMUMBLE_CONN_STATE_NOT_CONNECTED
 
             if self.media_socket in rlist:
-                self.media_socket.recvfrom(2048)
-                self.Log.debug("received UDP message")
                 self.read_udp_packet()
             elif self.media_socket in xlist:  # socket was closed
                 self.media_socket.close()
@@ -334,27 +333,11 @@ class Mumble(threading.Thread):
         except socket.error:
             pass
 
-        receive_buffer = self.ocb.decrypt(encrypted_buffer, len(encrypted_buffer))
-
-        while len(receive_buffer) >= 6:  # header is present (type + length)
-            self.Log.debug("read control connection")
-            header = receive_buffer[0:6]
-
-            if len(header) < 6:
-                break
-
-            (msg_type, size) = struct.unpack("!HL", header)  # decode header
-
-            if len(receive_buffer) < size + 6:  # if not length data, read further
-                break
-
-            # self.Log.debug("message received : " + tohex(self.receive_buffer[0:size+6]))  # for debugging
-
-            message = receive_buffer[6:size + 6]  # get the control message
-            receive_buffer = receive_buffer[size + 6:]  # remove from the buffer the read part
-
-            if msg_type == PYMUMBLE_MSG_TYPES_UDPTUNNEL:  # audio encapsulated in control message
-                self.sound_received(message)
+        try:
+            receive_buffer = self.ocb.decrypt(encrypted_buffer)
+            self.sound_received(receive_buffer)
+        except:
+            pass
 
     def read_control_messages(self):
         """Read control messages coming from the server"""
@@ -387,7 +370,7 @@ class Mumble(threading.Thread):
 
     def dispatch_control_message(self, msg_type, message):
         """Dispatch control messages based on their type"""
-        self.Log.debug("dispatch control message, type: %s, msg: %s", msg_type, message)
+        #self.Log.debug("dispatch control message, type: %s, msg: %s", msg_type, message)
         if msg_type == PYMUMBLE_MSG_TYPES_UDPTUNNEL:  # audio encapsulated in control message
             #if self.receive_sound:
             self.sound_received(message)
